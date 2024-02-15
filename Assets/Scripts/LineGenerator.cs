@@ -1,5 +1,6 @@
-using System.Collections;
 using System.Collections.Generic;
+using TMPro;
+using UnityEditor;
 using UnityEngine;
 using UnityEngine.EventSystems;
 
@@ -7,43 +8,40 @@ public class LineGenerator : MonoBehaviour
 {
     public GameObject linePrefab;
     private Line activeLine;
-    public List<GameObject> lines = new List<GameObject>(); // List to keep track of all line instances
-    private Vector2 startMousePos; // To check if the mouse has moved sufficiently to start a line
-    public bool isDragging = false; // To track if the user is dragging
-    public bool check = false;
+    public List<GameObject> lines = new List<GameObject>();
+    private Vector2 startMousePos;
+    public bool isDragging = false;
+    private LetterRecognizer letterRecognizer;
+    public LineRenderer debugLineRenderer;
+    public TextMeshProUGUI debugText;
+
+    private void Start()
+    {
+        letterRecognizer = GetComponent<LetterRecognizer>();
+    }
 
     private void Update()
     {
-
-        if (Input.GetMouseButtonDown(0))
+        if (Input.GetMouseButtonDown(0) && !CheckForUI())
         {
-            if(!CheckForUI()) 
-            {
-                startMousePos = Camera.main.ScreenToWorldPoint(Input.mousePosition);
-                if (!isDragging) // Ensure we reset dragging state when starting a new drag
-                {
-                    isDragging = false;
-                }
-            }
+            startMousePos = Camera.main.ScreenToWorldPoint(Input.mousePosition);
+            isDragging = false;
         }
 
         if (Input.GetMouseButton(0))
         {
             Vector2 currentMousePos = Camera.main.ScreenToWorldPoint(Input.mousePosition);
-            if (!isDragging && Vector2.Distance(startMousePos, currentMousePos) > 0.1f) // Check if the mouse has moved enough to consider it a drag
+            if (!isDragging && Vector2.Distance(startMousePos, currentMousePos) > 0.1f)
             {
-                isDragging = true; // Start dragging
+                isDragging = true;
                 CreateNewLine();
             }
         }
 
-        if (Input.GetMouseButtonUp(0))
+        if (Input.GetMouseButtonUp(0) && isDragging)
         {
-            if (isDragging)
-            {
-                activeLine = null;
-                isDragging = false; // Stop dragging
-            }
+            activeLine = null;
+            isDragging = false;
         }
 
         if (activeLine != null && isDragging)
@@ -52,7 +50,7 @@ public class LineGenerator : MonoBehaviour
             activeLine.UpdateLine(mousePos);
         }
 
-        if (Input.GetKeyDown(KeyCode.Z) && Input.GetKeyDown(KeyCode.LeftControl)) // Assuming Z key is for undo
+        if (Input.GetKeyDown(KeyCode.Z) && Input.GetKey(KeyCode.LeftControl))
         {
             UndoLastLine();
         }
@@ -60,20 +58,19 @@ public class LineGenerator : MonoBehaviour
 
     private void CreateNewLine()
     {
-        GameObject newLine = Instantiate(linePrefab);
-        activeLine = newLine.GetComponent<Line>();
-        lines.Add(newLine); // Add the new line to the list
+        GameObject newLineGO = Instantiate(linePrefab);
+        activeLine = newLineGO.GetComponent<Line>();
+        lines.Add(newLineGO);
     }
 
     public void UndoLastLine()
     {
         if (lines.Count > 0)
         {
-            GameObject lastLine = lines[lines.Count - 1]; // Get the last line drawn
-            lines.RemoveAt(lines.Count - 1); // Remove it from the list
-            Destroy(lastLine); // Destroy the line GameObject
+            GameObject lastLineGO = lines[lines.Count - 1];
+            lines.RemoveAt(lines.Count - 1);
+            Destroy(lastLineGO);
         }
-        // Reset dragging state after undoing a line to ensure we can start a new line immediately
         isDragging = false;
     }
 
@@ -83,12 +80,58 @@ public class LineGenerator : MonoBehaviour
         RaycastHit hit;
         if (Physics.Raycast(ray, out hit))
         {
-            if (hit.collider.gameObject.layer == LayerMask.NameToLayer("UI"))
-            {
-                // Hit a UI element, do not proceed with game object interaction
-                return true;
-            }
+            return hit.collider.gameObject.layer == LayerMask.NameToLayer("UI");
         }
         return false;
     }
+
+    // New method to be attached to a button for checking the match for letter 'a'
+    public void CheckMatchForLetterA()
+    {
+        List<Vector3> allPoints = new List<Vector3>(); // Use Vector3 for LineRenderer
+
+        // Combine all points from each stroke into a single list
+        foreach (GameObject lineGO in lines)
+        {
+            Line lineComponent = lineGO.GetComponent<Line>();
+            if (lineComponent != null)
+            {
+                foreach (var point in lineComponent.GetPoints())
+                {
+                    allPoints.Add(new Vector3(point.x, point.y, 0)); // Convert Vector2 to Vector3
+                }
+            }
+        }
+
+        LineRenderer debugline = Instantiate(debugLineRenderer);
+
+        // Update the LineRenderer with the combined points
+        if (debugline != null)
+        {
+            debugline.positionCount = allPoints.Count;
+            debugline.SetPositions(allPoints.ToArray());
+        }
+
+        List<List<Vector2>> allStrokes = new List<List<Vector2>>();
+        foreach (GameObject lineGO in lines)
+        {
+            Line lineComponent = lineGO.GetComponent<Line>();
+            if (lineComponent != null)
+            {
+                allStrokes.Add(lineComponent.GetPoints());
+            }
+        }
+
+        bool isAMatch = letterRecognizer.Recognize("a", allStrokes);
+        if (isAMatch)
+        {
+            debugText.text = "Match found for 'a'.";
+        }
+        else
+        {
+            debugText.text = "No match found for 'a'.";
+        }
+        Debug.Log(isAMatch ? "Match found for 'a'." : "No match found for 'a'.");
+    }
+
 }

@@ -31,4 +31,6 @@ public class Line : MonoBehaviour
         line.positionCount = points.Count;
         line.SetPosition(points.Count - 1, point);
     }
+
+    public List<Vector2> GetPoints() { return points; }
 }
